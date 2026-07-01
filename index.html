@@ -227,6 +227,9 @@
   table.preview th,table.preview td{ border-bottom:1px solid var(--border); padding:6px 8px; text-align:left; }
   table.preview th{ color:var(--text-muted); font-weight:500; font-size:11px; text-transform:uppercase; }
   table.preview input{ width:100%; padding:5px 6px; font-size:13px; }
+  table.preview input.dup{ border-color:var(--rust); background:rgba(193,96,63,0.18); }
+  .dup-warning{ color:var(--rust); font-size:12.5px; margin-top:8px; display:none; }
+  .dup-warning.show{ display:block; }
 
   /* ---------- Play mode ---------- */
   #playScreen{
@@ -352,6 +355,7 @@
       <thead><tr><th>Hole</th><th>Par</th><th>Distance (ft)</th></tr></thead>
       <tbody id="scanPreviewBody"></tbody>
     </table>
+    <div class="dup-warning" id="scanDupWarning">⚠ Duplicate hole numbers — fix before creating</div>
     <div class="btn-row" style="margin-top:14px;">
       <button class="btn btn-ghost" onclick="cancelScan()">Cancel</button>
       <button class="btn btn-primary" onclick="commitScan()">Create layout</button>
@@ -407,6 +411,7 @@
       <thead><tr><th>Hole</th><th>Par</th><th>Distance (ft)</th></tr></thead>
       <tbody id="importPreviewBody"></tbody>
     </table>
+    <div class="dup-warning" id="importDupWarning">⚠ Duplicate hole numbers — fix before adding</div>
     <div class="btn-row" style="margin-top:14px;">
       <button class="btn btn-ghost" onclick="cancelImport()">Cancel</button>
       <button class="btn btn-primary" onclick="commitImport()">Add to layout</button>
@@ -932,6 +937,20 @@ function parseImport(){
   renderImportPreview();
 }
 
+function checkDuplicateHoles(tbodyId, warningId){
+  const body = document.getElementById(tbodyId);
+  const inputs = Array.from(body.querySelectorAll('input[data-field="hole"]'));
+  const counts = {};
+  inputs.forEach(inp=>{ counts[inp.value] = (counts[inp.value]||0)+1; });
+  let anyDup = false;
+  inputs.forEach(inp=>{
+    const isDup = counts[inp.value] > 1;
+    inp.classList.toggle('dup', isDup);
+    if(isDup) anyDup = true;
+  });
+  document.getElementById(warningId).classList.toggle('show', anyDup);
+}
+
 function renderImportPreview(){
   const body = document.getElementById('importPreviewBody');
   body.innerHTML = '';
@@ -947,9 +966,11 @@ function renderImportPreview(){
     inp.addEventListener('input', e=>{
       const idx = e.target.dataset.idx, field = e.target.dataset.field;
       importParsedRows[idx][field] = field==='distance' ? e.target.value : (parseInt(e.target.value)||0);
+      checkDuplicateHoles('importPreviewBody', 'importDupWarning');
     });
   });
   document.getElementById('importPreviewWrap').classList.remove('hidden');
+  checkDuplicateHoles('importPreviewBody', 'importDupWarning');
 }
 
 function commitImport(){
@@ -1076,9 +1097,19 @@ function parseScorecardText(text){
   // HOLE row: small sequential-ish integers
   let holeC = byLabel('hole');
   if(!holeC || holeC.nums.length<3) holeC = bestUnclaimed(v=>v>=1&&v<=40, 3);
-  const holeNums = holeC ? holeC.nums : [];
+  let holeNums = holeC ? holeC.nums : [];
   if(holeC) claimed.add(holeC.line);
   const n = holeNums.length;
+
+  // Hole numbers are always a clean 1..N sequence on a real scorecard. If OCR
+  // misread a digit (e.g. "11" -> "1"), the value is wrong but its left-to-right
+  // POSITION is still reliable — so fall back to position-based numbering
+  // rather than trust individual misread digits and end up with duplicates/gaps.
+  const isCleanSequence = arr =>
+    arr.length>0 && arr.every((v,i)=> v===i+1) && new Set(arr).size===arr.length;
+  if(!isCleanSequence(holeNums)){
+    holeNums = Array.from({length:n}, (_,i)=>i+1);
+  }
 
   // PAR row: near-entirely values 1-9
   let parC = byLabel('par');
@@ -1141,10 +1172,12 @@ function populateScanPreview(parsed){
     inp.addEventListener('input', e=>{
       const idx = e.target.dataset.idx, field = e.target.dataset.field;
       scanParsed.rows[idx][field] = field==='distance' ? e.target.value : (parseInt(e.target.value)||0);
+      checkDuplicateHoles('scanPreviewBody', 'scanDupWarning');
     });
   });
 
   document.getElementById('scanPreviewWrap').classList.remove('hidden');
+  checkDuplicateHoles('scanPreviewBody', 'scanDupWarning');
 }
 
 function commitScan(){
