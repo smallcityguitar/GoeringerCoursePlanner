@@ -170,28 +170,25 @@
   .stat .k{ font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; }
   .stat.editable input{ width:64px; text-align:center; padding:6px 4px; }
 
-  /* chain-link shot toggles */
+  /* shot-type toggle rows: evenly fill the full width, no dead space */
   .chain-row{
-    display:flex; flex-wrap:wrap; gap:0; position:relative;
+    display:flex; gap:6px;
     margin:10px 0 4px;
   }
   .chain{
-    position:relative;
+    flex:1;
     display:flex; align-items:center; justify-content:center;
-    min-width:40px; height:40px; padding:0 12px;
-    border-radius:20px;
+    height:40px; padding:0 4px;
+    border-radius:10px;
     border:2px solid var(--border);
     background:var(--surface-2);
     color:var(--text-muted);
     font-size:12px; font-weight:600;
-    margin-right:-6px;
-    z-index:1;
+    white-space:nowrap;
     transition:background .15s, border-color .15s, color .15s;
   }
-  .chain:last-child{ margin-right:0; }
   .chain.on{
     background:var(--gold); border-color:var(--gold); color:#22190a;
-    z-index:2;
   }
   .disc-inputs{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
   .disc-input-row{
@@ -322,7 +319,7 @@
 <div class="screen hidden" id="scanScreen">
   <div class="section-label">Scan a scorecard photo</div>
   <div class="hint">
-    Upload a UDisc scorecard export (or a clear photo of a caddie book/scorecard) and this will pull the course name, location, and hole-by-hole par/distance out automatically.
+    Upload a UDisc scorecard export (or a clear photo of a caddie book/scorecard) and this will pull the course name and hole-by-hole par/distance out automatically.
     Runs OCR right here in your browser — the image never leaves your device. First scan takes ~10–20s while it downloads the recognition model; it's cached after that.
   </div>
   <input type="file" id="scanFileInput" accept="image/*" style="margin-top:12px; width:100%;">
@@ -337,10 +334,6 @@
     <div class="field">
       <span class="field-label">Layout name</span>
       <input id="scanLayoutName">
-    </div>
-    <div class="field">
-      <span class="field-label">Location</span>
-      <input id="scanLocation" placeholder="e.g. Morton, Illinois">
     </div>
     <div class="section-label">Add to</div>
     <select id="scanDestCourse" style="width:100%;"></select>
@@ -501,8 +494,6 @@ const ANGLES = [
   {key:'roller', label:'Roller'},
 ];
 const OTHER_TYPES = [
-  {key:'overhand', label:'Ovr/Thumb'},
-  {key:'putter', label:'Putt/Approach'},
   {key:'other', label:'Other'},
 ];
 
@@ -534,12 +525,12 @@ function blankHole(n){
     shots: {
       backhand: { on:false, angles: Object.fromEntries(ANGLES.map(a=>[a.key,false])) },
       forehand: { on:false, angles: Object.fromEntries(ANGLES.map(a=>[a.key,false])) },
-      overhand: false, putter: false, other: false
+      other: false
     },
     discs: {
       backhand: Object.fromEntries(ANGLES.map(a=>[a.key,''])),
       forehand: Object.fromEntries(ANGLES.map(a=>[a.key,''])),
-      overhand: '', putter: '', other: ''
+      other: ''
     }
   };
 }
@@ -549,8 +540,10 @@ function blankHole(n){
 // structure. Old backhand/forehand selections become "flat" angle by default since
 // that's the most neutral shape; a legacy standalone "roller" is folded into
 // backhand's roller angle, since that's the more common way to throw one.
+// Overhand and Putt/Approach were later removed as separate categories and fold
+// into "Other" here so no old plan data is silently dropped.
 function migrateHole(old){
-  if(old.shots && old.shots.backhand && typeof old.shots.backhand === 'object') return old;
+  if(old.shots && old.shots.backhand && typeof old.shots.backhand === 'object' && !('overhand' in old.shots)) return old;
   const fresh = blankHole(old.n);
   fresh.id = old.id || fresh.id;
   fresh.par = old.par;
@@ -558,24 +551,42 @@ function migrateHole(old){
   fresh.notes = old.notes || '';
   fresh.photo = old.photo || null;
   const os = old.shots || {}, od = old.discs || {};
-  if(os.backhand){
+
+  const bhOn = os.backhand === true || (os.backhand && os.backhand.on);
+  const fhOn = os.forehand === true || (os.forehand && os.forehand.on);
+  const bhDisc = typeof od.backhand === 'string' ? od.backhand : '';
+  const fhDisc = typeof od.forehand === 'string' ? od.forehand : '';
+
+  if(os.backhand && typeof os.backhand === 'object'){
+    fresh.shots.backhand = os.backhand;
+    fresh.discs.backhand = od.backhand && typeof od.backhand === 'object' ? od.backhand : fresh.discs.backhand;
+  } else if(bhOn){
     fresh.shots.backhand.on = true;
     fresh.shots.backhand.angles.flat = true;
-    fresh.discs.backhand.flat = od.backhand || '';
+    fresh.discs.backhand.flat = bhDisc;
   }
-  if(os.forehand){
+  if(os.forehand && typeof os.forehand === 'object'){
+    fresh.shots.forehand = os.forehand;
+    fresh.discs.forehand = od.forehand && typeof od.forehand === 'object' ? od.forehand : fresh.discs.forehand;
+  } else if(fhOn){
     fresh.shots.forehand.on = true;
     fresh.shots.forehand.angles.flat = true;
-    fresh.discs.forehand.flat = od.forehand || '';
+    fresh.discs.forehand.flat = fhDisc;
   }
   if(os.roller){
     fresh.shots.backhand.on = true;
     fresh.shots.backhand.angles.roller = true;
     fresh.discs.backhand.roller = od.roller || '';
   }
-  fresh.shots.overhand = !!os.overhand; fresh.discs.overhand = od.overhand || '';
-  fresh.shots.putter = !!os.putter; fresh.discs.putter = od.putter || '';
-  fresh.shots.other = !!os.other; fresh.discs.other = od.other || '';
+
+  let otherOn = !!os.other;
+  const otherParts = [];
+  if(os.other && od.other) otherParts.push(od.other);
+  if(os.overhand){ otherOn = true; if(od.overhand) otherParts.push('Overhand: '+od.overhand); }
+  if(os.putter){ otherOn = true; if(od.putter) otherParts.push('Putt/Approach: '+od.putter); }
+  fresh.shots.other = otherOn;
+  fresh.discs.other = otherParts.join('; ');
+
   return fresh;
 }
 function migrateState(){
@@ -583,7 +594,8 @@ function migrateState(){
   state.courses.forEach(c=>{
     (c.layouts||[]).forEach(l=>{
       l.holes = (l.holes||[]).map(h=>{
-        if(h.shots && h.shots.backhand && typeof h.shots.backhand === 'object') return h;
+        const alreadyCurrent = h.shots && h.shots.backhand && typeof h.shots.backhand === 'object' && !('overhand' in h.shots);
+        if(alreadyCurrent) return h;
         changed = true;
         return migrateHole(h);
       });
@@ -1271,38 +1283,12 @@ function parseScorecardText(text){
     });
   }
 
-  const location = extractLocation(lines);
-
-  return { courseName, layoutName, location, rows };
-}
-
-function extractLocation(lines){
-  // Strategy 1: "<Month> <Day>, [<time> AM/PM,] <City, State>" — handles the
-  // normal case, and tolerates OCR dropping the time portion entirely.
-  for(const l of lines){
-    const m = l.match(/[A-Z][a-z]{2,8}\.?\s+\d{1,2},\s*(?:\d{1,2}:\d{2}\s*[AP]M,\s*)?([A-Za-z][A-Za-z ,.]*?)(?=\s*\d|\s*$)/);
-    if(m && m[1].trim().replace(/,/g,'').length > 2) return m[1].replace(/,\s*$/,'').trim();
-  }
-  // Strategy 2: just a time stamp followed by a location, no date prefix caught.
-  for(const l of lines){
-    const m = l.match(/\d{1,2}:\d{2}\s*[AP]M,?\s*([A-Za-z][A-Za-z ,.]*?)(?=\s*\d|\s*$)/);
-    if(m && m[1].trim().replace(/,/g,'').length > 2) return m[1].replace(/,\s*$/,'').trim();
-  }
-  // Strategy 3: a standalone "City, State"-shaped line near the bottom, in case
-  // OCR dropped the date/time/weather text around it entirely.
-  for(let i=lines.length-1; i>=0; i--){
-    const l = lines[i];
-    if(/^(hole|dist|par|tot)\b/i.test(l)) continue;
-    const m = l.match(/^([A-Z][a-zA-Z.]*(?:\s[A-Z][a-zA-Z.]*)*,\s*[A-Z][a-zA-Z]+)\s*$/);
-    if(m) return m[1].trim();
-  }
-  return '';
+  return { courseName, layoutName, rows };
 }
 
 function populateScanPreview(parsed){
   document.getElementById('scanCourseName').value = parsed.courseName;
   document.getElementById('scanLayoutName').value = parsed.layoutName;
-  document.getElementById('scanLocation').value = parsed.location;
 
   const destSel = document.getElementById('scanDestCourse');
   destSel.innerHTML = '<option value="__new__">+ New course</option>' +
@@ -1333,12 +1319,11 @@ function populateScanPreview(parsed){
 function commitScan(){
   const courseName = document.getElementById('scanCourseName').value.trim() || 'Imported Course';
   const layoutName = document.getElementById('scanLayoutName').value.trim() || 'Imported layout';
-  const location = document.getElementById('scanLocation').value.trim();
   const destId = document.getElementById('scanDestCourse').value;
 
   let course;
   if(destId === '__new__'){
-    course = { id: uid(), name: courseName, location, layouts: [] };
+    course = { id: uid(), name: courseName, location: '', layouts: [] };
     state.courses.push(course);
   } else {
     course = getCourse(destId);
