@@ -1242,44 +1242,47 @@ function parseScorecardText(text){
   // HOLE row: small sequential-ish integers
   let holeC = byLabel('hole');
   if(!holeC || holeC.nums.length<3) holeC = bestUnclaimed(v=>v>=1&&v<=40, 3);
-  let holeNums = holeC ? holeC.nums : [];
+  const holeNumsRaw = holeC ? holeC.nums : [];
   if(holeC) claimed.add(holeC.line);
-  const n = holeNums.length;
 
-  // Hole numbers are always a clean 1..N sequence on a real scorecard. If OCR
-  // misread a digit (e.g. "11" -> "1"), the value is wrong but its left-to-right
-  // POSITION is still reliable — so fall back to position-based numbering
-  // rather than trust individual misread digits and end up with duplicates/gaps.
-  const isCleanSequence = arr =>
-    arr.length>0 && arr.every((v,i)=> v===i+1) && new Set(arr).size===arr.length;
-  if(!isCleanSequence(holeNums)){
-    holeNums = Array.from({length:n}, (_,i)=>i+1);
-  }
-
-  // PAR row: near-entirely values 1-9
+  // PAR row: near-entirely values 1-9. Filtering to this range also strips a
+  // trailing grand-total figure (e.g. "68") that sometimes rides along on the
+  // same OCR line as the real per-hole values — pars are never >9, totals always are.
   let parC = byLabel('par');
-  if(!parC || parC.nums.length < Math.max(3, n-3) || !parC.nums.every(p=>p>=1&&p<=9)){
+  if(!parC || parC.nums.length < 3 || !parC.nums.every(p=>p>=1&&p<=9)){
     parC = bestUnclaimed(v=>v>=1&&v<=9, 3);
   }
-  const parNums = parC ? parC.nums : [];
+  const parNumsRaw = parC ? parC.nums : [];
+  const parNumsClean = parNumsRaw.filter(p=>p>=1&&p<=9);
   if(parC) claimed.add(parC.line);
 
   // DIST row: mostly values well above par-sized numbers
   let distC = byLabel('dist');
-  if(!distC || distC.nums.length < Math.max(3, n-3) || !distC.nums.some(d=>d>60)){
+  if(!distC || distC.nums.length < 3 || !distC.nums.some(d=>d>60)){
     distC = bestUnclaimed(v=>v>60, 3);
   }
   const distNums = distC ? distC.nums : [];
 
-  const total = n || Math.max(distNums.length, parNums.length);
-  if(total===0) return null;
+  // Row count: PAR is the most trustworthy source (its range is unambiguous,
+  // so a grand total can never masquerade as a real value in it). Only fall
+  // back to HOLE/DIST length if PAR came up too short to trust — this avoids
+  // both failure modes: a short HOLE row silently capping everything else,
+  // and a trailing grand-total value getting counted as a phantom extra hole.
+  const n = parNumsClean.length>=3 ? parNumsClean.length : Math.max(holeNumsRaw.length, distNums.length);
+  if(n===0) return null;
+
+  const isCleanSequence = arr =>
+    arr.length===n && arr.every((v,i)=> v===i+1) && new Set(arr).size===arr.length;
+  const holeNums = isCleanSequence(holeNumsRaw) ? holeNumsRaw : Array.from({length:n}, (_,i)=>i+1);
+  const parNums = parNumsClean.slice(0, n);
+  const distNumsTrimmed = distNums.slice(0, n);
 
   const rows = [];
-  for(let i=0;i<total;i++){
+  for(let i=0;i<n;i++){
     rows.push({
       hole: holeNums[i] !== undefined ? holeNums[i] : i+1,
-      par: (parNums[i] !== undefined && parNums[i] <= 9) ? parNums[i] : 3,
-      distance: distNums[i] !== undefined ? distNums[i] : ''
+      par: parNums[i] !== undefined ? parNums[i] : 3,
+      distance: distNumsTrimmed[i] !== undefined ? distNumsTrimmed[i] : ''
     });
   }
 
