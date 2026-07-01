@@ -1013,6 +1013,7 @@ async function handleScanFile(e){
         }
       }
     });
+    await worker.setParameters({ tessedit_pageseg_mode: '6' }); // uniform block of text
     const { data: { text } } = await worker.recognize(file);
     await worker.terminate();
 
@@ -1045,21 +1046,60 @@ function parseScorecardText(text){
   }
   if(!layoutName) layoutName = 'Imported layout';
 
-  const holeLine = lines.find(l=>/^hole\b/i.test(l));
-  const distLine = lines.find(l=>/^dist\b/i.test(l));
-  const parLine  = lines.find(l=>/^par\b/i.test(l));
-
   const extractNums = (line)=> line ? (line.match(/\d[\d,]*/g)||[]).map(n=>parseInt(n.replace(/,/g,''),10)) : [];
 
-  const holeNums = extractNums(holeLine);
-  const distNums = extractNums(distLine);
-  const parNums  = extractNums(parLine);
+  // Every line with a decent run of numbers is a candidate row — OCR doesn't
+  // reliably keep "HOLE"/"DIST"/"PAR" labels glued to their own numbers on
+  // wide tables, so we verify by value shape, not just by label text.
+  const candidates = lines
+    .map(l=>({ line:l, nums: extractNums(l) }))
+    .filter(c=>c.nums.length>=3);
 
-  const n = holeNums.length || Math.max(distNums.length, parNums.length);
-  if(n===0) return null;
+  const claimed = new Set();
+  function byLabel(label){
+    const idx = lines.findIndex(l=>new RegExp('^'+label+'\\b','i').test(l));
+    if(idx===-1) return null;
+    return { line: lines[idx], nums: extractNums(lines[idx]) };
+  }
+  function bestUnclaimed(predicate, minCount){
+    let best=null;
+    candidates.forEach(c=>{
+      if(claimed.has(c.line)) return;
+      const validCount = c.nums.filter(predicate).length;
+      if(c.nums.length>=minCount && validCount/c.nums.length >= 0.7 && (!best || c.nums.length>best.nums.length)){
+        best = c;
+      }
+    });
+    return best;
+  }
+
+  // HOLE row: small sequential-ish integers
+  let holeC = byLabel('hole');
+  if(!holeC || holeC.nums.length<3) holeC = bestUnclaimed(v=>v>=1&&v<=40, 3);
+  const holeNums = holeC ? holeC.nums : [];
+  if(holeC) claimed.add(holeC.line);
+  const n = holeNums.length;
+
+  // PAR row: near-entirely values 1-9
+  let parC = byLabel('par');
+  if(!parC || parC.nums.length < Math.max(3, n-3) || !parC.nums.every(p=>p>=1&&p<=9)){
+    parC = bestUnclaimed(v=>v>=1&&v<=9, 3);
+  }
+  const parNums = parC ? parC.nums : [];
+  if(parC) claimed.add(parC.line);
+
+  // DIST row: mostly values well above par-sized numbers
+  let distC = byLabel('dist');
+  if(!distC || distC.nums.length < Math.max(3, n-3) || !distC.nums.some(d=>d>60)){
+    distC = bestUnclaimed(v=>v>60, 3);
+  }
+  const distNums = distC ? distC.nums : [];
+
+  const total = n || Math.max(distNums.length, parNums.length);
+  if(total===0) return null;
 
   const rows = [];
-  for(let i=0;i<n;i++){
+  for(let i=0;i<total;i++){
     rows.push({
       hole: holeNums[i] !== undefined ? holeNums[i] : i+1,
       par: (parNums[i] !== undefined && parNums[i] <= 9) ? parNums[i] : 3,
