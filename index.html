@@ -1266,19 +1266,33 @@ function parseHolesByPosition(words){
 
   const holeEntries = rowEntries(holeAnchor).filter(e => e.value>=1 && e.value<=40);
   const parEntries = rowEntries(parAnchor).filter(e => e.value>=1 && e.value<=9);
-  const distEntries = rowEntries(distAnchor).filter(e => e.value>60);
+  const distEntriesRaw = rowEntries(distAnchor).filter(e => e.value>60);
 
-  // Whichever of HOLE/PAR detected the most columns defines the true column
-  // layout. DIST is deliberately excluded from this choice unless both of the
-  // others failed outright — DIST is the one row that can pick up a trailing
-  // grand-total figure (e.g. "10,417") that looks like a perfectly plausible
-  // extra column, where HOLE ("Tot" has no digit) and PAR (already range-
-  // filtered to 1-9) structurally can't be inflated that way.
-  const trustworthy = [holeEntries, parEntries].filter(e => e.length>=3);
-  const ref = trustworthy.length>0
-    ? trustworthy.slice().sort((a,b)=>b.length-a.length)[0]
-    : (distEntries.length>=3 ? distEntries : null);
-  if(!ref) return null;
+  // DIST is the one row that can pick up a trailing grand-total figure (e.g.
+  // "10,417") that reads as a perfectly plausible extra column. A real total
+  // sits both noticeably further right than the normal column spacing AND at
+  // a value far beyond any single hole (even a very long one) — so detect and
+  // drop it explicitly, rather than distrusting DIST's count altogether.
+  function stripTrailingTotal(entries){
+    if(entries.length<4) return entries;
+    const sorted = entries.slice().sort((a,b)=>a.x-b.x);
+    const last = sorted[sorted.length-1];
+    const rest = sorted.slice(0,-1);
+    const gaps = [];
+    for(let i=1;i<rest.length;i++) gaps.push(rest[i].x-rest[i-1].x);
+    const avgGap = gaps.length ? gaps.reduce((a,b)=>a+b,0)/gaps.length : 0;
+    const gapToLast = last.x - rest[rest.length-1].x;
+    const looksLikeTotal = last.value > 2500 && avgGap>0 && gapToLast > avgGap*1.5;
+    return looksLikeTotal ? rest : sorted;
+  }
+  const distEntries = stripTrailingTotal(distEntriesRaw);
+
+  // Whichever row detected the most columns — after the above sanitizing —
+  // defines the true column layout; the other rows get matched onto those
+  // physical positions rather than counted independently.
+  const candidates = [holeEntries, parEntries, distEntries].filter(e => e.length>=3);
+  if(candidates.length===0) return null;
+  const ref = candidates.slice().sort((a,b)=>b.length-a.length)[0];
 
   const spacings = [];
   for(let i=1;i<ref.length;i++) spacings.push(ref[i].x - ref[i-1].x);
