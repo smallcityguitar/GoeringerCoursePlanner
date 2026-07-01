@@ -1180,11 +1180,11 @@ async function handleScanFile(e){
       }
     });
     await worker.setParameters({ tessedit_pageseg_mode: '6' }); // uniform block of text
-    const { data: { text } } = await worker.recognize(file);
+    const { data } = await worker.recognize(file);
     await worker.terminate();
 
     progressEl.textContent = 'Parsing…';
-    const parsed = parseScorecardText(text);
+    const parsed = parseScorecardData(data);
     if(!parsed || parsed.rows.length===0){
       progressEl.textContent = "Couldn't find hole numbers in that image. Try a clearer or more tightly cropped screenshot — or use paste-import instead.";
       return;
@@ -1198,7 +1198,8 @@ async function handleScanFile(e){
   }
 }
 
-function parseScorecardText(text){
+function parseScorecardData(data){
+  const text = data.text || '';
   const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   if(lines.length===0) return null;
 
@@ -1212,7 +1213,102 @@ function parseScorecardText(text){
   }
   if(!layoutName) layoutName = 'Imported layout';
 
+  // Primary path: match each number to its physical column position on the
+  // image, using OCR's per-word bounding boxes. This is what actually fixes
+  // misalignment — line-by-line text counting breaks the moment a SINGLE token
+  // drops out of the middle of a row (everything after it silently shifts over
+  // by one), because it has no idea where a value "should" sit, only how many
+  // it found. Position doesn't have that problem: a missing PAR value just
+  // leaves that one column blank instead of relabeling every later hole.
+  let rows = (Array.isArray(data.words) && data.words.length>0) ? parseHolesByPosition(data.words) : null;
+
+  // Fallback: old text-line heuristics, only used if word-position data isn't
+  // available for some reason.
+  if(!rows || rows.length===0) rows = parseHolesByLineHeuristics(lines);
+  if(!rows || rows.length===0) return null;
+
+  return { courseName, layoutName, rows };
+}
+
+function toNumOrNull(str){
+  const cleaned = String(str||'').replace(/[^\d]/g,'');
+  if(!cleaned) return null;
+  const n = parseInt(cleaned, 10);
+  return isNaN(n) ? null : n;
+}
+
+function parseHolesByPosition(words){
+  const validWords = words.filter(w=>w && w.bbox && w.text && w.text.trim());
+
+  function findAnchor(label){
+    return validWords.find(w => w.text.replace(/[^a-zA-Z]/g,'').toLowerCase() === label);
+  }
+  const holeAnchor = findAnchor('hole');
+  const parAnchor = findAnchor('par');
+  const distAnchor = findAnchor('dist');
+  if(!holeAnchor && !parAnchor && !distAnchor) return null;
+
+  // Collect every numeric word whose vertical position lines up with a given
+  // row's label — this is the row, regardless of how the text happens to be
+  // split into lines.
+  function rowEntries(anchor){
+    if(!anchor) return [];
+    const yCenter = (anchor.bbox.y0 + anchor.bbox.y1) / 2;
+    const rowHeight = anchor.bbox.y1 - anchor.bbox.y0;
+    const tol = Math.max(rowHeight * 1.3, 14);
+    return validWords
+      .filter(w => w !== anchor)
+      .filter(w => Math.abs(((w.bbox.y0 + w.bbox.y1) / 2) - yCenter) <= tol)
+      .map(w => ({ x: (w.bbox.x0 + w.bbox.x1) / 2, value: toNumOrNull(w.text) }))
+      .filter(w => w.value !== null)
+      .sort((a,b) => a.x - b.x);
+  }
+
+  const holeEntries = rowEntries(holeAnchor).filter(e => e.value>=1 && e.value<=40);
+  const parEntries = rowEntries(parAnchor).filter(e => e.value>=1 && e.value<=9);
+  const distEntries = rowEntries(distAnchor).filter(e => e.value>60);
+
+  // Whichever of HOLE/PAR detected the most columns defines the true column
+  // layout. DIST is deliberately excluded from this choice unless both of the
+  // others failed outright — DIST is the one row that can pick up a trailing
+  // grand-total figure (e.g. "10,417") that looks like a perfectly plausible
+  // extra column, where HOLE ("Tot" has no digit) and PAR (already range-
+  // filtered to 1-9) structurally can't be inflated that way.
+  const trustworthy = [holeEntries, parEntries].filter(e => e.length>=3);
+  const ref = trustworthy.length>0
+    ? trustworthy.slice().sort((a,b)=>b.length-a.length)[0]
+    : (distEntries.length>=3 ? distEntries : null);
+  if(!ref) return null;
+
+  const spacings = [];
+  for(let i=1;i<ref.length;i++) spacings.push(ref[i].x - ref[i-1].x);
+  const avgSpacing = spacings.length ? spacings.reduce((a,b)=>a+b,0)/spacings.length : 40;
+  const matchTol = Math.max(avgSpacing * 0.6, 10);
+
+  function nearestValue(entries, x){
+    let best=null, bestDist=Infinity;
+    entries.forEach(e=>{
+      const d = Math.abs(e.x - x);
+      if(d < bestDist){ bestDist = d; best = e; }
+    });
+    return (best && bestDist <= matchTol) ? best.value : undefined;
+  }
+
+  const rows = ref.map(col => ({
+    x: col.x,
+    par: nearestValue(parEntries, col.x) ?? 3,
+    distance: nearestValue(distEntries, col.x) ?? ''
+  }));
+  // Hole numbers come from physical left-to-right order, not from whatever
+  // digit (if any) OCR guessed at that column — position is always reliable,
+  // individual digit reads aren't.
+  rows.sort((a,b)=>a.x-b.x);
+  return rows.map((r,i)=>({ hole: i+1, par: r.par, distance: r.distance }));
+}
+
+function parseHolesByLineHeuristics(lines){
   const extractNums = (line)=> line ? (line.match(/\d[\d,]*/g)||[]).map(n=>parseInt(n.replace(/,/g,''),10)) : [];
+
 
   // Every line with a decent run of numbers is a candidate row — OCR doesn't
   // reliably keep "HOLE"/"DIST"/"PAR" labels glued to their own numbers on
@@ -1289,7 +1385,7 @@ function parseScorecardText(text){
     });
   }
 
-  return { courseName, layoutName, rows };
+  return rows;
 }
 
 function populateScanPreview(parsed){
