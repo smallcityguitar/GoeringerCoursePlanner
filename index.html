@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Round Plan — Goeringer Discs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --bg:#16211c;
+    --surface:#1f2d26;
+    --surface-2:#26362d;
+    --border:#324338;
+    --text:#f4efe3;
+    --text-muted:#9db3a4;
+    --gold:#d4a24e;
+    --gold-dim:#7a6438;
+    --rust:#c1603f;
+    --green-ok:#6fae7f;
+    --radius:14px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding-bottom:calc(24px + var(--safe-bottom));
+  }
+  h1,h2,h3,.display{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    letter-spacing:-0.01em;
+    margin:0;
+  }
+  button{
+    font-family:'IBM Plex Mono', monospace;
+    cursor:pointer;
+  }
+  input,textarea,select{
+    font-family:'IBM Plex Mono', monospace;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:15px;
+  }
+  input:focus,textarea:focus,select:focus{
+    outline:2px solid var(--gold);
+    outline-offset:1px;
+  }
+  ::placeholder{ color:#6d8377; }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg, var(--bg) 80%, transparent);
+    padding:16px 16px 8px;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:8px;
+  }
+  .brand{
+    display:flex; flex-direction:column; line-height:1.1;
+  }
+  .brand .eyebrow{
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--gold); font-weight:600;
+  }
+  .brand h1{ font-size:20px; }
+  .icon-btn{
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text); border-radius:10px; padding:9px 12px;
+    font-size:13px; display:flex; align-items:center; gap:6px;
+  }
+  .icon-btn:active{ background:var(--surface-2); }
+
+  .screen{ padding:0 16px 16px; max-width:720px; margin:0 auto; }
+  .hidden{ display:none !important; }
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--text);
+    border-radius:10px;
+    padding:12px 16px;
+    font-size:14px;
+    font-weight:500;
+  }
+  .btn:active{ background:var(--surface-2); }
+  .btn-primary{
+    background:var(--gold); color:#22190a; border-color:var(--gold);
+    font-weight:600;
+  }
+  .btn-primary:active{ background:#c8963f; }
+  .btn-danger{ color:var(--rust); border-color:var(--rust); background:transparent; }
+  .btn-ghost{ background:transparent; border-color:var(--border); }
+  .btn-block{ width:100%; }
+  .btn-row{ display:flex; gap:8px; }
+  .btn-row .btn{ flex:1; }
+
+  /* ---------- Course list ---------- */
+  .empty-state{
+    text-align:center; padding:60px 20px; color:var(--text-muted);
+  }
+  .empty-state .glyph{ font-size:40px; margin-bottom:12px; }
+  .card-list{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .course-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:14px 16px;
+    display:flex; justify-content:space-between; align-items:center;
+    gap:10px;
+  }
+  .course-card:active{ background:var(--surface-2); }
+  .course-card .name{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; }
+  .course-card .meta{ color:var(--text-muted); font-size:12.5px; margin-top:3px; }
+  .chevron{ color:var(--text-muted); font-size:18px; }
+
+  .section-label{
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--text-muted); margin:22px 0 8px; font-weight:600;
+  }
+
+  /* ---------- Layout chips within a course ---------- */
+  .layout-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 14px; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; margin-bottom:8px;
+  }
+  .layout-row .name{ font-weight:600; font-family:'Space Grotesk',sans-serif; }
+  .layout-row .meta{ color:var(--text-muted); font-size:12px; }
+  .layout-actions{ display:flex; gap:6px; }
+  .mini-btn{
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text-muted);
+    border-radius:8px; padding:7px 10px; font-size:12px;
+  }
+  .mini-btn.gold{ color:var(--gold); border-color:var(--gold-dim); }
+  .mini-btn.rust{ color:var(--rust); border-color:var(--rust); }
+
+  /* ---------- Tee plate / stat badge ---------- */
+  .tee-plate{
+    display:flex; align-items:center; gap:14px;
+  }
+  .badge{
+    width:52px; height:52px; border-radius:50%;
+    border:2px solid var(--gold);
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column; flex-shrink:0;
+    background:radial-gradient(circle at 30% 25%, #33452f, var(--surface-2));
+  }
+  .badge .num{ font-size:18px; font-weight:600; font-family:'Space Grotesk',sans-serif; line-height:1; }
+  .badge .lbl{ font-size:8px; letter-spacing:.08em; color:var(--text-muted); text-transform:uppercase; }
+
+  /* ---------- Hole card (plan editor) ---------- */
+  .hole-card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:16px; margin-bottom:14px;
+  }
+  .hole-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:12px;}
+  .hole-stats{ display:flex; gap:16px; }
+  .stat{ text-align:left; }
+  .stat .v{ font-size:20px; font-weight:600; font-family:'Space Grotesk',sans-serif; }
+  .stat .k{ font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; }
+  .stat.editable input{ width:64px; text-align:center; padding:6px 4px; }
+
+  /* chain-link shot toggles */
+  .chain-row{
+    display:flex; flex-wrap:wrap; gap:0; position:relative;
+    margin:10px 0 4px;
+  }
+  .chain{
+    position:relative;
+    display:flex; align-items:center; justify-content:center;
+    min-width:40px; height:40px; padding:0 12px;
+    border-radius:20px;
+    border:2px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text-muted);
+    font-size:12px; font-weight:600;
+    margin-right:-6px;
+    z-index:1;
+    transition:background .15s, border-color .15s, color .15s;
+  }
+  .chain:last-child{ margin-right:0; }
+  .chain.on{
+    background:var(--gold); border-color:var(--gold); color:#22190a;
+    z-index:2;
+  }
+  .disc-inputs{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+  .disc-input-row{
+    display:flex; align-items:center; gap:8px;
+    animation:fadein .15s ease;
+  }
+  @keyframes fadein{ from{opacity:0; transform:translateY(-3px);} to{opacity:1; transform:none;} }
+  .disc-input-row .tag{
+    font-size:11px; color:var(--gold); min-width:78px; text-transform:uppercase; letter-spacing:.06em;
+  }
+  .disc-input-row input{ flex:1; }
+  textarea.notes{ width:100%; resize:vertical; min-height:44px; margin-top:10px; }
+  .photo-row{ display:flex; align-items:center; gap:10px; margin-top:6px; }
+  .photo-thumb{
+    width:76px; height:76px; object-fit:cover; border-radius:10px;
+    border:1px solid var(--border); cursor:pointer;
+  }
+  #lightboxBackdrop{ align-items:center; z-index:70; }
+  #lightboxBackdrop img{
+    max-width:92vw; max-height:85vh; border-radius:12px; display:block;
+  }
+  .play-photo{
+    max-width:100%; border-radius:12px; margin-top:16px;
+    border:1px solid var(--border); cursor:pointer;
+  }
+
+  /* ---------- Import screen ---------- */
+  textarea.import-area{
+    width:100%; min-height:160px; margin-top:8px;
+  }
+  .hint{ color:var(--text-muted); font-size:12.5px; line-height:1.5; margin-top:6px;}
+  table.preview{ width:100%; border-collapse:collapse; margin-top:14px; font-size:13px; }
+  table.preview th,table.preview td{ border-bottom:1px solid var(--border); padding:6px 8px; text-align:left; }
+  table.preview th{ color:var(--text-muted); font-weight:500; font-size:11px; text-transform:uppercase; }
+  table.preview input{ width:100%; padding:5px 6px; font-size:13px; }
+
+  /* ---------- Play mode ---------- */
+  #playScreen{
+    position:fixed; inset:0; background:var(--bg); z-index:50;
+    display:flex; flex-direction:column;
+  }
+  #playScreen.light{ --bg:#f4efe3; --surface:#fff; --surface-2:#efe7d6; --text:#22190a; --text-muted:#7a6a52; --border:#ddd0b3; }
+  .play-top{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 16px; border-bottom:1px solid var(--border);
+  }
+  .play-body{
+    flex:1; overflow-y:auto; padding:20px 20px 10px;
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+  }
+  .play-hole-num{ color:var(--text-muted); font-size:13px; text-transform:uppercase; letter-spacing:.12em; }
+  .play-badges{ display:flex; gap:28px; margin:14px 0 20px; }
+  .play-stat .v{ font-size:40px; font-weight:700; font-family:'Space Grotesk',sans-serif; }
+  .play-stat .k{ font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; }
+  .play-chips{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:16px; }
+  .play-chip{
+    background:var(--gold); color:#22190a; border-radius:20px; padding:8px 16px;
+    font-size:13px; font-weight:600; display:flex; flex-direction:column; line-height:1.3;
+  }
+  .play-chip small{ font-weight:500; opacity:.75; font-size:11px; }
+  .play-notes{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px; margin-top:6px; width:100%; text-align:left; font-size:14px; color:var(--text);
+    white-space:pre-wrap;
+  }
+  .play-notes.empty{ color:var(--text-muted); font-style:italic; }
+  .play-nav{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px calc(14px + var(--safe-bottom));
+    border-top:1px solid var(--border); gap:10px;
+  }
+  .nav-btn{
+    flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text);
+    border-radius:12px; padding:16px; font-size:15px; font-weight:600;
+  }
+  .nav-btn:disabled{ opacity:.35; }
+  .dot-row{ display:flex; gap:4px; flex-wrap:wrap; justify-content:center; max-width:140px; }
+  .dot{ width:6px; height:6px; border-radius:50%; background:var(--border); }
+  .dot.active{ background:var(--gold); width:16px; border-radius:4px; }
+
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed; bottom:calc(20px + var(--safe-bottom)); left:50%; transform:translateX(-50%);
+    background:var(--surface-2); border:1px solid var(--gold); color:var(--text);
+    padding:10px 18px; border-radius:20px; font-size:13px; z-index:100;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  #toast.show{ opacity:1; }
+
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:60;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  .modal{
+    background:var(--surface); border:1px solid var(--border); border-radius:18px 18px 0 0;
+    padding:20px; width:100%; max-width:520px;
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .modal h3{ font-size:17px; }
+  .field-label{ font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px; display:block;}
+  .field{ margin-bottom:10px; }
+  .field input, .field textarea{ width:100%; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="eyebrow">Goeringer Discs</span>
+    <h1 id="topTitle">Round Plans</h1>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="icon-btn" id="backBtn" onclick="goBack()" style="display:none;">← Back</button>
+    <button class="icon-btn" id="backupBtn" onclick="openBackupModal()">⚙</button>
+  </div>
+</div>
+
+<!-- ================= COURSE LIST ================= -->
+<div class="screen" id="courseListScreen">
+  <div id="courseListEmpty" class="empty-state hidden">
+    <div class="glyph">🥏</div>
+    <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:16px; margin-bottom:6px;">No courses yet</div>
+    <div>Add the course you're planning to play, then build out your layout and shot plan hole by hole.</div>
+  </div>
+  <div class="card-list" id="courseList"></div>
+  <button class="btn btn-primary btn-block" style="margin-top:16px;" onclick="openCourseModal()">+ Add course</button>
+  <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="showScanScreen()">📷 Scan a UDisc scorecard</button>
+</div>
+
+<!-- ================= SCAN SCORECARD (image OCR) ================= -->
+<div class="screen hidden" id="scanScreen">
+  <div class="section-label">Scan a scorecard photo</div>
+  <div class="hint">
+    Upload a UDisc scorecard export (or a clear photo of a caddie book/scorecard) and this will pull the course name, location, and hole-by-hole par/distance out automatically.
+    Runs OCR right here in your browser — the image never leaves your device. First scan takes ~10–20s while it downloads the recognition model; it's cached after that.
+  </div>
+  <input type="file" id="scanFileInput" accept="image/*" style="margin-top:12px; width:100%;">
+  <div id="scanProgress" class="hint hidden" style="margin-top:10px;"></div>
+
+  <div id="scanPreviewWrap" class="hidden" style="margin-top:18px;">
+    <div class="hint">Double-check these against the photo — OCR isn't perfect, especially on distances with commas.</div>
+    <div class="field" style="margin-top:12px;">
+      <span class="field-label">Course name</span>
+      <input id="scanCourseName">
+    </div>
+    <div class="field">
+      <span class="field-label">Layout name</span>
+      <input id="scanLayoutName">
+    </div>
+    <div class="field">
+      <span class="field-label">Location</span>
+      <input id="scanLocation" placeholder="e.g. Morton, Illinois">
+    </div>
+    <div class="section-label">Add to</div>
+    <select id="scanDestCourse" style="width:100%;"></select>
+    <div class="section-label">Holes</div>
+    <table class="preview">
+      <thead><tr><th>Hole</th><th>Par</th><th>Distance (ft)</th></tr></thead>
+      <tbody id="scanPreviewBody"></tbody>
+    </table>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn btn-ghost" onclick="cancelScan()">Cancel</button>
+      <button class="btn btn-primary" onclick="commitScan()">Create layout</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= LAYOUT LIST (within a course) ================= -->
+<div class="screen hidden" id="layoutListScreen">
+  <div class="section-label">Layouts</div>
+  <div id="layoutList"></div>
+  <button class="btn btn-ghost btn-block" onclick="openLayoutModal()">+ Add layout</button>
+
+  <div class="section-label">Course</div>
+  <div class="btn-row">
+    <button class="btn btn-ghost" onclick="openCourseModal(true)">Edit course</button>
+    <button class="btn btn-danger" onclick="deleteCourse()">Delete course</button>
+  </div>
+</div>
+
+<!-- ================= PLAN EDITOR (holes) ================= -->
+<div class="screen hidden" id="planScreen">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+    <div class="section-label" style="margin:0;">Hole-by-hole plan</div>
+    <button class="mini-btn gold" onclick="enterPlayMode()">▶ Play mode</button>
+  </div>
+  <div id="holeList"></div>
+  <button class="btn btn-ghost btn-block" onclick="addHole()">+ Add hole</button>
+
+  <div class="section-label">Layout data</div>
+  <div class="btn-row">
+    <button class="btn btn-ghost" onclick="showImportScreen()">Paste / import holes</button>
+    <button class="btn btn-ghost" onclick="openLayoutModal(true)">Rename</button>
+  </div>
+  <div class="btn-row" style="margin-top:8px;">
+    <button class="btn btn-ghost" onclick="duplicateLayout()">Duplicate as new plan</button>
+    <button class="btn btn-danger" onclick="deleteLayout()">Delete layout</button>
+  </div>
+</div>
+
+<!-- ================= IMPORT SCREEN ================= -->
+<div class="screen hidden" id="importScreen">
+  <div class="section-label">Paste hole data</div>
+  <div class="hint">
+    Copy hole info from wherever you've got it — a UDisc scorecard, a caddie book PDF, a DiscGolfScene page, an Excel/Sheets export — and paste the raw text below.
+    Works with lines like <b>"1  3  350"</b> (hole, par, distance), tab or comma separated rows, or just par+distance per line if hole numbers aren't included.
+  </div>
+  <textarea class="import-area" id="importText" placeholder="1	3	318&#10;2	4	412&#10;3	3	275&#10;..."></textarea>
+  <button class="btn btn-primary btn-block" style="margin-top:10px;" onclick="parseImport()">Parse</button>
+  <div id="importPreviewWrap" class="hidden">
+    <div class="section-label">Preview — edit anything that looks off</div>
+    <table class="preview">
+      <thead><tr><th>Hole</th><th>Par</th><th>Distance (ft)</th></tr></thead>
+      <tbody id="importPreviewBody"></tbody>
+    </table>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn btn-ghost" onclick="cancelImport()">Cancel</button>
+      <button class="btn btn-primary" onclick="commitImport()">Add to layout</button>
+    </div>
+    <div class="hint">This appends to existing holes by hole number (matching numbers get overwritten). Notes and shot plans on existing holes are kept.</div>
+  </div>
+</div>
+
+<!-- ================= PLAY MODE ================= -->
+<div id="playScreen" class="hidden">
+  <div class="play-top">
+    <button class="icon-btn" onclick="exitPlayMode()">✕ Exit</button>
+    <div class="dot-row" id="playDots"></div>
+    <button class="icon-btn" id="lightToggleBtn" onclick="togglePlayLight()">☀</button>
+  </div>
+  <div class="play-body" id="playBody"></div>
+  <div class="play-nav">
+    <button class="nav-btn" id="prevHoleBtn" onclick="playNav(-1)">← Prev</button>
+    <button class="nav-btn" id="nextHoleBtn" onclick="playNav(1)">Next →</button>
+  </div>
+</div>
+
+<!-- ================= MODALS ================= -->
+<div class="modal-backdrop hidden" id="courseModal">
+  <div class="modal">
+    <h3 id="courseModalTitle">Add course</h3>
+    <div class="field">
+      <span class="field-label">Course name</span>
+      <input id="courseNameInput" placeholder="e.g. Lake Eureka Basketball Courts">
+    </div>
+    <div class="field">
+      <span class="field-label">Location (optional)</span>
+      <input id="courseLocationInput" placeholder="e.g. Eureka, IL">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal('courseModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCourse()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="layoutModal">
+  <div class="modal">
+    <h3 id="layoutModalTitle">Add layout</h3>
+    <div class="field">
+      <span class="field-label">Layout name</span>
+      <input id="layoutNameInput" placeholder="e.g. Gold layout / Tournament layout">
+    </div>
+    <div class="field">
+      <span class="field-label">Number of holes</span>
+      <input id="layoutHoleCountInput" type="number" min="1" max="27" value="18">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal('layoutModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLayout()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="backupModal">
+  <div class="modal">
+    <h3>Backup & data</h3>
+    <div class="hint">Everything's saved to this browser's local storage automatically. Export a backup before clearing browser data, or to move plans to another device. Reference photos are compressed but still use real space — if saves start failing, that's usually a storage-quota issue; export a backup and trim some photos.</div>
+    <div class="btn-row" style="margin-top:6px;">
+      <button class="btn btn-ghost" onclick="exportData()">Export JSON</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">Import JSON</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json" class="hidden" onchange="importData(event)">
+    <button class="btn btn-danger btn-block" style="margin-top:6px;" onclick="wipeAll()">Erase all data</button>
+    <button class="btn btn-ghost btn-block" onclick="closeModal('backupModal')">Close</button>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="lightboxBackdrop" onclick="closeLightbox()">
+  <img id="lightboxImg" src="">
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   STATE
+   ============================================================ */
+const STORE_KEY = 'discGolfPlanner.v1';
+const SHOT_TYPES = [
+  {key:'backhand', label:'BH'},
+  {key:'forehand', label:'FH'},
+  {key:'roller', label:'Roller'},
+  {key:'overhand', label:'Ovr/Thumb'},
+  {key:'putter', label:'Putt/Approach'},
+  {key:'other', label:'Other'},
+];
+const SHOT_LABELS = Object.fromEntries(SHOT_TYPES.map(s=>[s.key,s.label]));
+
+let state = loadState();
+let nav = { screen:'courseList', courseId:null, layoutId:null };
+let playIndex = 0;
+let importParsedRows = [];
+
+function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){ console.error('load failed', e); }
+  return { courses: [] };
+}
+function saveState(){
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  }catch(e){
+    console.error('save failed', e);
+    toast('⚠ Save failed — storage may be full');
+  }
+}
+function blankHole(n){
+  return { id: uid(), n, par: 3, distance: '', notes: '', photo: null,
+    shots: Object.fromEntries(SHOT_TYPES.map(s=>[s.key,false])),
+    discs: Object.fromEntries(SHOT_TYPES.map(s=>[s.key,''])) };
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* ============================================================
+   NAVIGATION / RENDER ROUTER
+   ============================================================ */
+function showScreen(id){
+  ['courseListScreen','layoutListScreen','planScreen','importScreen','scanScreen'].forEach(s=>{
+    document.getElementById(s).classList.toggle('hidden', s!==id);
+  });
+  document.getElementById('backBtn').style.display = id==='courseListScreen' ? 'none' : 'flex';
+}
+
+function getCourse(id){ return state.courses.find(c=>c.id===id); }
+function getLayout(course, id){ return course.layouts.find(l=>l.id===id); }
+
+function goBack(){
+  if(nav.screen==='scanScreen'){ renderCourseList(); return; }
+  if(nav.screen==='importScreen'){ nav.screen='plan'; renderPlan(); return; }
+  if(nav.screen==='plan'){ nav.screen='layoutList'; renderLayoutList(); return; }
+  if(nav.screen==='layoutList'){ nav.screen='courseList'; renderCourseList(); return; }
+}
+
+/* ---------- Course list ---------- */
+function renderCourseList(){
+  nav.screen='courseList'; nav.courseId=null; nav.layoutId=null;
+  document.getElementById('topTitle').textContent = 'Round Plans';
+  showScreen('courseListScreen');
+  const list = document.getElementById('courseList');
+  const empty = document.getElementById('courseListEmpty');
+  list.innerHTML = '';
+  empty.classList.toggle('hidden', state.courses.length>0);
+  state.courses.forEach(c=>{
+    const el = document.createElement('div');
+    el.className = 'course-card';
+    el.onclick = ()=>openCourse(c.id);
+    const layoutCount = c.layouts.length;
+    el.innerHTML = `
+      <div>
+        <div class="name">${escapeHtml(c.name)}</div>
+        <div class="meta">${c.location ? escapeHtml(c.location)+' · ' : ''}${layoutCount} layout${layoutCount!==1?'s':''}</div>
+      </div>
+      <div class="chevron">›</div>`;
+    list.appendChild(el);
+  });
+}
+
+function openCourse(id){
+  nav.courseId = id;
+  renderLayoutList();
+}
+
+/* ---------- Layout list ---------- */
+function renderLayoutList(){
+  nav.screen='layoutList';
+  const course = getCourse(nav.courseId);
+  document.getElementById('topTitle').textContent = course.name;
+  showScreen('layoutListScreen');
+  const list = document.getElementById('layoutList');
+  list.innerHTML = '';
+  if(course.layouts.length===0){
+    list.innerHTML = `<div class="hint">No layouts yet. Add one to start building holes.</div>`;
+  }
+  course.layouts.forEach(l=>{
+    const el = document.createElement('div');
+    el.className = 'layout-row';
+    el.innerHTML = `
+      <div onclick="openLayout('${l.id}')" style="flex:1; cursor:pointer;">
+        <div class="name">${escapeHtml(l.name)}</div>
+        <div class="meta">${l.holes.length} holes</div>
+      </div>
+      <div class="layout-actions">
+        <button class="mini-btn gold" onclick="openLayout('${l.id}')">Plan</button>
+      </div>`;
+    list.appendChild(el);
+  });
+}
+
+function openLayout(id){
+  nav.layoutId = id;
+  renderPlan();
+}
+
+/* ---------- Plan editor ---------- */
+function renderPlan(){
+  nav.screen='plan';
+  const course = getCourse(nav.courseId);
+  const layout = getLayout(course, nav.layoutId);
+  document.getElementById('topTitle').textContent = layout.name;
+  showScreen('planScreen');
+  const wrap = document.getElementById('holeList');
+  wrap.innerHTML = '';
+  layout.holes.sort((a,b)=>a.n-b.n).forEach(hole=>{
+    wrap.appendChild(renderHoleCard(layout, hole));
+  });
+}
+
+function renderHoleCard(layout, hole){
+  const card = document.createElement('div');
+  card.className = 'hole-card';
+
+  const head = document.createElement('div');
+  head.className = 'hole-head';
+  head.innerHTML = `
+    <div class="tee-plate">
+      <div class="badge"><div class="num">${hole.n}</div><div class="lbl">Hole</div></div>
+      <div class="hole-stats">
+        <div class="stat editable">
+          <div class="k">Par</div>
+          <input type="number" min="1" max="7" value="${hole.par}" data-field="par">
+        </div>
+        <div class="stat editable">
+          <div class="k">Dist (ft)</div>
+          <input type="number" min="0" value="${escapeAttr(hole.distance)}" data-field="distance" placeholder="—">
+        </div>
+      </div>
+    </div>
+    <button class="mini-btn rust" data-role="delete">✕</button>`;
+  head.querySelector('[data-field="par"]').addEventListener('input', e=>{
+    hole.par = parseInt(e.target.value)||0; saveState();
+  });
+  head.querySelector('[data-field="distance"]').addEventListener('input', e=>{
+    hole.distance = e.target.value; saveState();
+  });
+  head.querySelector('[data-role="delete"]').addEventListener('click', ()=>{
+    if(confirm(`Remove hole ${hole.n}?`)){
+      layout.holes = layout.holes.filter(h=>h.id!==hole.id);
+      saveState(); renderPlan();
+    }
+  });
+  card.appendChild(head);
+
+  const chainRow = document.createElement('div');
+  chainRow.className = 'chain-row';
+  SHOT_TYPES.forEach(st=>{
+    const chip = document.createElement('button');
+    chip.className = 'chain' + (hole.shots[st.key] ? ' on' : '');
+    chip.textContent = st.label;
+    chip.onclick = ()=>{
+      hole.shots[st.key] = !hole.shots[st.key];
+      saveState();
+      renderPlan();
+    };
+    chainRow.appendChild(chip);
+  });
+  card.appendChild(chainRow);
+
+  const discWrap = document.createElement('div');
+  discWrap.className = 'disc-inputs';
+  SHOT_TYPES.forEach(st=>{
+    if(!hole.shots[st.key]) return;
+    const row = document.createElement('div');
+    row.className = 'disc-input-row';
+    row.innerHTML = `<span class="tag">${st.label}</span>`;
+    const inp = document.createElement('input');
+    inp.placeholder = 'Disc name…';
+    inp.value = hole.discs[st.key] || '';
+    inp.addEventListener('input', e=>{ hole.discs[st.key] = e.target.value; saveState(); });
+    row.appendChild(inp);
+    discWrap.appendChild(row);
+  });
+  card.appendChild(discWrap);
+
+  const notes = document.createElement('textarea');
+  notes.className = 'notes';
+  notes.placeholder = 'Notes: line, hazards, OB, wind read, mando side…';
+  notes.value = hole.notes || '';
+  notes.addEventListener('input', e=>{ hole.notes = e.target.value; saveState(); });
+  card.appendChild(notes);
+
+  const photoWrap = document.createElement('div');
+  photoWrap.className = 'photo-section';
+  const photoLabel = document.createElement('div');
+  photoLabel.className = 'field-label';
+  photoLabel.style.marginTop = '12px';
+  photoLabel.textContent = 'Reference photo';
+  photoWrap.appendChild(photoLabel);
+
+  const photoRow = document.createElement('div');
+  photoRow.className = 'photo-row';
+  if(hole.photo){
+    const img = document.createElement('img');
+    img.className = 'photo-thumb';
+    img.src = hole.photo;
+    img.onclick = ()=>openLightbox(hole.photo);
+    photoRow.appendChild(img);
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'mini-btn rust';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = ()=>{ hole.photo = null; saveState(); renderPlan(); };
+    photoRow.appendChild(removeBtn);
+  } else {
+    const addBtn = document.createElement('button');
+    addBtn.className = 'mini-btn gold';
+    addBtn.textContent = '+ Add photo';
+    addBtn.onclick = ()=>{
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e)=>handlePhotoUpload(e, hole);
+      input.click();
+    };
+    photoRow.appendChild(addBtn);
+  }
+  photoWrap.appendChild(photoRow);
+  card.appendChild(photoWrap);
+
+  return card;
+}
+
+function handlePhotoUpload(e, hole){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const maxDim = 1200;
+      let width = img.width, height = img.height;
+      if(width > maxDim || height > maxDim){
+        if(width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
+        else { width = Math.round(width * maxDim / height); height = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      hole.photo = canvas.toDataURL('image/jpeg', 0.72);
+      saveState();
+      renderPlan();
+    };
+    img.onerror = ()=> toast("Couldn't read that image");
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function openLightbox(src){
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightboxBackdrop').classList.remove('hidden');
+}
+function closeLightbox(){
+  document.getElementById('lightboxBackdrop').classList.add('hidden');
+  document.getElementById('lightboxImg').src = '';
+}
+
+function addHole(){
+  const course = getCourse(nav.courseId);
+  const layout = getLayout(course, nav.layoutId);
+  const nextN = layout.holes.length ? Math.max(...layout.holes.map(h=>h.n))+1 : 1;
+  layout.holes.push(blankHole(nextN));
+  saveState();
+  renderPlan();
+}
+
+/* ============================================================
+   MODALS: Course / Layout
+   ============================================================ */
+function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+let editingCourse = false;
+function openCourseModal(editing){
+  editingCourse = !!editing;
+  const course = editingCourse ? getCourse(nav.courseId) : null;
+  document.getElementById('courseModalTitle').textContent = editingCourse ? 'Edit course' : 'Add course';
+  document.getElementById('courseNameInput').value = course ? course.name : '';
+  document.getElementById('courseLocationInput').value = course ? (course.location||'') : '';
+  openModal('courseModal');
+}
+function saveCourse(){
+  const name = document.getElementById('courseNameInput').value.trim();
+  const location = document.getElementById('courseLocationInput').value.trim();
+  if(!name){ toast('Course needs a name'); return; }
+  if(editingCourse){
+    const course = getCourse(nav.courseId);
+    course.name = name; course.location = location;
+  } else {
+    const course = { id: uid(), name, location, layouts: [] };
+    state.courses.push(course);
+    nav.courseId = course.id;
+  }
+  saveState();
+  closeModal('courseModal');
+  if(editingCourse) renderLayoutList(); else renderLayoutList();
+}
+function deleteCourse(){
+  const course = getCourse(nav.courseId);
+  if(!confirm(`Delete "${course.name}" and all its layouts/plans? This can't be undone.`)) return;
+  state.courses = state.courses.filter(c=>c.id!==course.id);
+  saveState();
+  renderCourseList();
+}
+
+let editingLayout = false;
+function openLayoutModal(editing){
+  editingLayout = !!editing;
+  const course = getCourse(nav.courseId);
+  const layout = editingLayout ? getLayout(course, nav.layoutId) : null;
+  document.getElementById('layoutModalTitle').textContent = editingLayout ? 'Rename layout' : 'Add layout';
+  document.getElementById('layoutNameInput').value = layout ? layout.name : '';
+  document.getElementById('layoutHoleCountInput').value = layout ? layout.holes.length : 18;
+  document.getElementById('layoutHoleCountInput').closest('.field').style.display = editingLayout ? 'none' : 'block';
+  openModal('layoutModal');
+}
+function saveLayout(){
+  const name = document.getElementById('layoutNameInput').value.trim();
+  if(!name){ toast('Layout needs a name'); return; }
+  const course = getCourse(nav.courseId);
+  if(editingLayout){
+    const layout = getLayout(course, nav.layoutId);
+    layout.name = name;
+    saveState(); closeModal('layoutModal'); renderPlan();
+    return;
+  }
+  const holeCount = Math.max(1, Math.min(27, parseInt(document.getElementById('layoutHoleCountInput').value)||18));
+  const layout = { id: uid(), name, holes: [] };
+  for(let i=1;i<=holeCount;i++) layout.holes.push(blankHole(i));
+  course.layouts.push(layout);
+  nav.layoutId = layout.id;
+  saveState();
+  closeModal('layoutModal');
+  renderLayoutList();
+}
+function deleteLayout(){
+  const course = getCourse(nav.courseId);
+  const layout = getLayout(course, nav.layoutId);
+  if(!confirm(`Delete layout "${layout.name}"? This can't be undone.`)) return;
+  course.layouts = course.layouts.filter(l=>l.id!==layout.id);
+  saveState();
+  renderLayoutList();
+}
+function duplicateLayout(){
+  const course = getCourse(nav.courseId);
+  const layout = getLayout(course, nav.layoutId);
+  const copy = JSON.parse(JSON.stringify(layout));
+  copy.id = uid();
+  copy.name = layout.name + ' (copy)';
+  copy.holes.forEach(h=>h.id = uid());
+  course.layouts.push(copy);
+  saveState();
+  toast('Duplicated — edit the copy freely');
+  nav.layoutId = copy.id;
+  renderPlan();
+}
+
+/* ============================================================
+   IMPORT / PASTE PARSER
+   ============================================================ */
+function showImportScreen(){
+  nav.screen = 'importScreen';
+  document.getElementById('importText').value = '';
+  document.getElementById('importPreviewWrap').classList.add('hidden');
+  importParsedRows = [];
+  showScreen('importScreen');
+}
+function cancelImport(){ nav.screen='plan'; renderPlan(); }
+
+function parseImport(){
+  const raw = document.getElementById('importText').value;
+  const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const rows = [];
+  let autoHole = 1;
+  lines.forEach(line=>{
+    // skip obvious header lines with no digits
+    const nums = line.match(/-?\d+(\.\d+)?/g);
+    if(!nums){ return; }
+    const nats = nums.map(Number);
+    let hole, par, distance;
+    if(nats.length>=3){
+      // assume hole, par, distance — but sanity check: hole should be small & increasing-ish, par 1-7
+      [hole, par, distance] = nats;
+      if(par>7 || par<1){
+        // maybe order is different (par, hole, distance) — fallback heuristic: smallest of first two is par
+        const sorted = [hole, par].sort((a,b)=>a-b);
+        par = sorted[0]; hole = sorted[1];
+      }
+    } else if(nats.length===2){
+      // ambiguous: could be [par, distance] or [hole, distance]
+      const [a,b] = nats;
+      if(a<=7 && b>a*10){ // looks like par + distance
+        par = a; distance = b; hole = autoHole;
+      } else { // looks like hole + distance, no par given
+        hole = a; distance = b; par = 3;
+      }
+    } else if(nats.length===1){
+      distance = nats[0]; hole = autoHole; par = 3;
+    }
+    rows.push({ hole: hole||autoHole, par: par||3, distance: distance!==undefined ? distance : '' });
+    autoHole = (hole||autoHole) + 1;
+  });
+  if(rows.length===0){
+    toast('Couldn\'t find any hole numbers in that text');
+    return;
+  }
+  importParsedRows = rows;
+  renderImportPreview();
+}
+
+function renderImportPreview(){
+  const body = document.getElementById('importPreviewBody');
+  body.innerHTML = '';
+  importParsedRows.forEach((row, idx)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="number" value="${row.hole}" data-idx="${idx}" data-field="hole"></td>
+      <td><input type="number" value="${row.par}" data-idx="${idx}" data-field="par"></td>
+      <td><input type="number" value="${row.distance}" data-idx="${idx}" data-field="distance"></td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const idx = e.target.dataset.idx, field = e.target.dataset.field;
+      importParsedRows[idx][field] = field==='distance' ? e.target.value : (parseInt(e.target.value)||0);
+    });
+  });
+  document.getElementById('importPreviewWrap').classList.remove('hidden');
+}
+
+function commitImport(){
+  const course = getCourse(nav.courseId);
+  const layout = getLayout(course, nav.layoutId);
+  importParsedRows.forEach(row=>{
+    let existing = layout.holes.find(h=>h.n===row.hole);
+    if(existing){
+      existing.par = row.par;
+      existing.distance = row.distance;
+    } else {
+      const h = blankHole(row.hole);
+      h.par = row.par; h.distance = row.distance;
+      layout.holes.push(h);
+    }
+  });
+  saveState();
+  toast(`Imported ${importParsedRows.length} holes`);
+  nav.screen='plan';
+  renderPlan();
+}
+
+/* ============================================================
+   SCAN SCORECARD (image OCR)
+   ============================================================ */
+let scanParsed = null;
+
+function showScanScreen(){
+  nav.screen = 'scanScreen';
+  document.getElementById('scanFileInput').value = '';
+  document.getElementById('scanProgress').classList.add('hidden');
+  document.getElementById('scanPreviewWrap').classList.add('hidden');
+  scanParsed = null;
+  showScreen('scanScreen');
+}
+function cancelScan(){
+  scanParsed = null;
+  renderCourseList();
+}
+
+document.getElementById('scanFileInput').addEventListener('change', handleScanFile);
+
+async function handleScanFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const progressEl = document.getElementById('scanProgress');
+  progressEl.classList.remove('hidden');
+  document.getElementById('scanPreviewWrap').classList.add('hidden');
+  progressEl.textContent = 'Loading OCR engine…';
+
+  if(typeof Tesseract === 'undefined'){
+    progressEl.textContent = "Couldn't load the OCR engine (no internet connection?). Try again, or use paste-import instead.";
+    return;
+  }
+
+  try{
+    const worker = await Tesseract.createWorker('eng', 1, {
+      logger: m=>{
+        if(m.status && typeof m.progress === 'number'){
+          progressEl.textContent = `${m.status}… ${Math.round(m.progress*100)}%`;
+        }
+      }
+    });
+    const { data: { text } } = await worker.recognize(file);
+    await worker.terminate();
+
+    progressEl.textContent = 'Parsing…';
+    const parsed = parseScorecardText(text);
+    if(!parsed || parsed.rows.length===0){
+      progressEl.textContent = "Couldn't find hole numbers in that image. Try a clearer or more tightly cropped screenshot — or use paste-import instead.";
+      return;
+    }
+    scanParsed = parsed;
+    progressEl.classList.add('hidden');
+    populateScanPreview(parsed);
+  }catch(err){
+    console.error(err);
+    progressEl.textContent = 'OCR failed: ' + (err.message || err);
+  }
+}
+
+function parseScorecardText(text){
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(lines.length===0) return null;
+
+  // Title lines: e.g. "Northwood Park - Black" then "Northwood Black"
+  let courseName = lines[0] || 'Imported Course';
+  let layoutName = (lines[1] && !/^(hole|dist|par)\b/i.test(lines[1])) ? lines[1] : '';
+  if(courseName.includes(' - ')){
+    const parts = courseName.split(' - ');
+    courseName = parts[0].trim();
+    if(!layoutName) layoutName = parts.slice(1).join(' - ').trim();
+  }
+  if(!layoutName) layoutName = 'Imported layout';
+
+  const holeLine = lines.find(l=>/^hole\b/i.test(l));
+  const distLine = lines.find(l=>/^dist\b/i.test(l));
+  const parLine  = lines.find(l=>/^par\b/i.test(l));
+
+  const extractNums = (line)=> line ? (line.match(/\d[\d,]*/g)||[]).map(n=>parseInt(n.replace(/,/g,''),10)) : [];
+
+  const holeNums = extractNums(holeLine);
+  const distNums = extractNums(distLine);
+  const parNums  = extractNums(parLine);
+
+  const n = holeNums.length || Math.max(distNums.length, parNums.length);
+  if(n===0) return null;
+
+  const rows = [];
+  for(let i=0;i<n;i++){
+    rows.push({
+      hole: holeNums[i] !== undefined ? holeNums[i] : i+1,
+      par: (parNums[i] !== undefined && parNums[i] <= 9) ? parNums[i] : 3,
+      distance: distNums[i] !== undefined ? distNums[i] : ''
+    });
+  }
+
+  // Footer: "Jul 1, 3:37 PM, Morton, Illinois   91 °F  5.0 mph SE"
+  let location = '';
+  const footerLine = lines.find(l=>/\d{1,2}:\d{2}\s*[AP]M/.test(l));
+  if(footerLine){
+    const m = footerLine.match(/\d{1,2}:\d{2}\s*[AP]M,?\s*([A-Za-z][A-Za-z .]*?)(?=\s*\d|\s*$)/);
+    if(m) location = m[1].replace(/,\s*$/,'').trim();
+  }
+
+  return { courseName, layoutName, location, rows };
+}
+
+function populateScanPreview(parsed){
+  document.getElementById('scanCourseName').value = parsed.courseName;
+  document.getElementById('scanLayoutName').value = parsed.layoutName;
+  document.getElementById('scanLocation').value = parsed.location;
+
+  const destSel = document.getElementById('scanDestCourse');
+  destSel.innerHTML = '<option value="__new__">+ New course</option>' +
+    state.courses.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+
+  const body = document.getElementById('scanPreviewBody');
+  body.innerHTML = '';
+  parsed.rows.forEach((row, idx)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="number" value="${row.hole}" data-idx="${idx}" data-field="hole"></td>
+      <td><input type="number" value="${row.par}" data-idx="${idx}" data-field="par"></td>
+      <td><input type="number" value="${row.distance}" data-idx="${idx}" data-field="distance"></td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const idx = e.target.dataset.idx, field = e.target.dataset.field;
+      scanParsed.rows[idx][field] = field==='distance' ? e.target.value : (parseInt(e.target.value)||0);
+    });
+  });
+
+  document.getElementById('scanPreviewWrap').classList.remove('hidden');
+}
+
+function commitScan(){
+  const courseName = document.getElementById('scanCourseName').value.trim() || 'Imported Course';
+  const layoutName = document.getElementById('scanLayoutName').value.trim() || 'Imported layout';
+  const location = document.getElementById('scanLocation').value.trim();
+  const destId = document.getElementById('scanDestCourse').value;
+
+  let course;
+  if(destId === '__new__'){
+    course = { id: uid(), name: courseName, location, layouts: [] };
+    state.courses.push(course);
+  } else {
+    course = getCourse(destId);
+  }
+
+  const layout = { id: uid(), name: layoutName, holes: [] };
+  scanParsed.rows.forEach(row=>{
+    const h = blankHole(row.hole);
+    h.par = row.par;
+    h.distance = row.distance;
+    layout.holes.push(h);
+  });
+  course.layouts.push(layout);
+  saveState();
+  toast(`Created "${layoutName}" with ${layout.holes.length} holes`);
+  nav.courseId = course.id;
+  nav.layoutId = layout.id;
+  renderPlan();
+}
+
+/* ============================================================
+   PLAY MODE
+   ============================================================ */
+function enterPlayMode(){
+  const course = getCourse(nav.courseId);
+  const layout = getLayout(course, nav.layoutId);
+  if(layout.holes.length===0){ toast('Add some holes first'); return; }
+  playIndex = 0;
+  document.getElementById('playScreen').classList.remove('hidden');
+  renderPlayHole();
+}
+function exitPlayMode(){
+  document.getElementById('playScreen').classList.add('hidden');
+}
+function togglePlayLight(){
+  const el = document.getElementById('playScreen');
+  el.classList.toggle('light');
+  document.getElementById('lightToggleBtn').textContent = el.classList.contains('light') ? '🌙' : '☀';
+}
+function playNav(dir){
+  const course = getCourse(nav.courseId);
+  const layout = getLayout(course, nav.layoutId);
+  const holes = layout.holes.slice().sort((a,b)=>a.n-b.n);
+  playIndex = Math.max(0, Math.min(holes.length-1, playIndex+dir));
+  renderPlayHole();
+}
+function renderPlayHole(){
+  const course = getCourse(nav.courseId);
+  const layout = getLayout(course, nav.layoutId);
+  const holes = layout.holes.slice().sort((a,b)=>a.n-b.n);
+  const hole = holes[playIndex];
+
+  document.getElementById('prevHoleBtn').disabled = playIndex===0;
+  document.getElementById('nextHoleBtn').disabled = playIndex===holes.length-1;
+  document.getElementById('nextHoleBtn').textContent = playIndex===holes.length-1 ? 'Last hole' : 'Next →';
+
+  const dots = document.getElementById('playDots');
+  dots.innerHTML = '';
+  holes.forEach((h,i)=>{
+    const d = document.createElement('div');
+    d.className = 'dot' + (i===playIndex ? ' active' : '');
+    dots.appendChild(d);
+  });
+
+  const activeShots = SHOT_TYPES.filter(st=>hole.shots[st.key]);
+  const body = document.getElementById('playBody');
+  body.innerHTML = `
+    <div class="play-hole-num">Hole ${hole.n} of ${holes.length}</div>
+    <div class="play-badges">
+      <div class="play-stat"><div class="v">${hole.par}</div><div class="k">Par</div></div>
+      <div class="play-stat"><div class="v">${hole.distance || '—'}</div><div class="k">Feet</div></div>
+    </div>
+    <div class="play-chips">
+      ${activeShots.length ? activeShots.map(st=>`
+        <div class="play-chip">${st.label}${hole.discs[st.key] ? `<small>${escapeHtml(hole.discs[st.key])}</small>` : ''}</div>
+      `).join('') : '<div class="hint">No shot plan set for this hole yet</div>'}
+    </div>
+    <div class="play-notes ${hole.notes ? '' : 'empty'}">${hole.notes ? escapeHtml(hole.notes) : 'No notes for this hole'}</div>
+  `;
+  if(hole.photo){
+    const img = document.createElement('img');
+    img.className = 'play-photo';
+    img.src = hole.photo;
+    img.onclick = ()=>openLightbox(hole.photo);
+    body.appendChild(img);
+  }
+}
+
+// swipe support
+(function(){
+  let touchStartX = null;
+  const body = ()=>document.getElementById('playBody');
+  document.addEventListener('touchstart', e=>{
+    if(document.getElementById('playScreen').classList.contains('hidden')) return;
+    touchStartX = e.touches[0].clientX;
+  });
+  document.addEventListener('touchend', e=>{
+    if(touchStartX===null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if(Math.abs(dx) > 60){ playNav(dx<0 ? 1 : -1); }
+    touchStartX = null;
+  });
+})();
+
+/* ============================================================
+   BACKUP / EXPORT / IMPORT
+   ============================================================ */
+function openBackupModal(){ openModal('backupModal'); }
+function exportData(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `disc-golf-plans-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Exported');
+}
+function importData(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const incoming = JSON.parse(e.target.result);
+      if(!incoming.courses) throw new Error('bad format');
+      if(confirm('Replace current data with this backup? (Cancel to merge instead)')){
+        state = incoming;
+      } else {
+        incoming.courses.forEach(c=>{ c.id = uid(); c.layouts.forEach(l=>{ l.id = uid(); l.holes.forEach(h=>h.id=uid()); }); });
+        state.courses.push(...incoming.courses);
+      }
+      saveState();
+      closeModal('backupModal');
+      renderCourseList();
+      toast('Imported');
+    }catch(err){
+      toast('That file didn\'t look like a valid backup');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+function wipeAll(){
+  if(!confirm('Erase everything? This cannot be undone.')) return;
+  if(!confirm('Really sure? All courses, layouts, and plans will be deleted.')) return;
+  state = { courses: [] };
+  saveState();
+  closeModal('backupModal');
+  renderCourseList();
+}
+
+/* ============================================================
+   UTIL
+   ============================================================ */
+function escapeHtml(str){
+  return String(str??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(str){ return escapeHtml(str); }
+
+/* ============================================================
+   INIT
+   ============================================================ */
+renderCourseList();
+</script>
+</body>
+</html>
