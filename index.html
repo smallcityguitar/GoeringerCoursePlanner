@@ -200,8 +200,10 @@
   }
   @keyframes fadein{ from{opacity:0; transform:translateY(-3px);} to{opacity:1; transform:none;} }
   .disc-input-row .tag{
-    font-size:11px; color:var(--gold); min-width:78px; text-transform:uppercase; letter-spacing:.06em;
+    font-size:11px; color:var(--gold); min-width:110px; text-transform:uppercase; letter-spacing:.06em;
   }
+  .chain.angle.on{ background:var(--green-ok); border-color:var(--green-ok); color:#0f1c13; }
+  .shot-type-block{ margin-top:4px; padding-top:8px; border-top:1px dashed var(--border); }
   .disc-input-row input{ flex:1; }
   textarea.notes{ width:100%; resize:vertical; min-height:44px; margin-top:10px; }
   .photo-row{ display:flex; align-items:center; gap:10px; margin-top:6px; }
@@ -249,18 +251,10 @@
   .play-badges{ display:flex; gap:28px; margin:14px 0 20px; }
   .play-stat .v{ font-size:40px; font-weight:700; font-family:'Space Grotesk',sans-serif; }
   .play-stat .k{ font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; }
-  .play-chips{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:16px; }
-  .play-chip{
-    background:var(--gold); color:#22190a; border-radius:20px; padding:8px 16px;
-    font-size:13px; font-weight:600; display:flex; flex-direction:column; line-height:1.3;
-  }
-  .play-chip small{ font-weight:500; opacity:.75; font-size:11px; }
-  .play-notes{
-    background:var(--surface); border:1px solid var(--border); border-radius:12px;
-    padding:14px 16px; margin-top:6px; width:100%; text-align:left; font-size:14px; color:var(--text);
-    white-space:pre-wrap;
-  }
-  .play-notes.empty{ color:var(--text-muted); font-style:italic; }
+  .play-shot-section{ width:100%; text-align:left; margin:4px 0 14px; }
+  .play-shot-section .chain-row{ justify-content:center; }
+  .play-shot-section .disc-inputs{ max-width:340px; margin-left:auto; margin-right:auto; }
+  textarea.play-notes-input{ text-align:left; }
   .play-nav{
     display:flex; align-items:center; justify-content:space-between;
     padding:14px 16px calc(14px + var(--safe-bottom));
@@ -496,17 +490,24 @@
    STATE
    ============================================================ */
 const STORE_KEY = 'discGolfPlanner.v1';
-const SHOT_TYPES = [
-  {key:'backhand', label:'BH'},
-  {key:'forehand', label:'FH'},
+const PRIMARY_TYPES = [
+  {key:'backhand', label:'Backhand'},
+  {key:'forehand', label:'Forehand'},
+];
+const ANGLES = [
+  {key:'hyzer', label:'Hyzer'},
+  {key:'flat', label:'Flat'},
+  {key:'turnover', label:'Turnover'},
   {key:'roller', label:'Roller'},
+];
+const OTHER_TYPES = [
   {key:'overhand', label:'Ovr/Thumb'},
   {key:'putter', label:'Putt/Approach'},
   {key:'other', label:'Other'},
 ];
-const SHOT_LABELS = Object.fromEntries(SHOT_TYPES.map(s=>[s.key,s.label]));
 
 let state = loadState();
+migrateState();
 let nav = { screen:'courseList', courseId:null, layoutId:null };
 let playIndex = 0;
 let importParsedRows = [];
@@ -530,8 +531,65 @@ function saveState(){
 }
 function blankHole(n){
   return { id: uid(), n, par: 3, distance: '', notes: '', photo: null,
-    shots: Object.fromEntries(SHOT_TYPES.map(s=>[s.key,false])),
-    discs: Object.fromEntries(SHOT_TYPES.map(s=>[s.key,''])) };
+    shots: {
+      backhand: { on:false, angles: Object.fromEntries(ANGLES.map(a=>[a.key,false])) },
+      forehand: { on:false, angles: Object.fromEntries(ANGLES.map(a=>[a.key,false])) },
+      overhand: false, putter: false, other: false
+    },
+    discs: {
+      backhand: Object.fromEntries(ANGLES.map(a=>[a.key,''])),
+      forehand: Object.fromEntries(ANGLES.map(a=>[a.key,''])),
+      overhand: '', putter: '', other: ''
+    }
+  };
+}
+
+// Upgrades holes saved under the old flat shot-type structure (backhand/forehand/
+// roller/etc as plain booleans) to the new nested backhand.angles / forehand.angles
+// structure. Old backhand/forehand selections become "flat" angle by default since
+// that's the most neutral shape; a legacy standalone "roller" is folded into
+// backhand's roller angle, since that's the more common way to throw one.
+function migrateHole(old){
+  if(old.shots && old.shots.backhand && typeof old.shots.backhand === 'object') return old;
+  const fresh = blankHole(old.n);
+  fresh.id = old.id || fresh.id;
+  fresh.par = old.par;
+  fresh.distance = old.distance;
+  fresh.notes = old.notes || '';
+  fresh.photo = old.photo || null;
+  const os = old.shots || {}, od = old.discs || {};
+  if(os.backhand){
+    fresh.shots.backhand.on = true;
+    fresh.shots.backhand.angles.flat = true;
+    fresh.discs.backhand.flat = od.backhand || '';
+  }
+  if(os.forehand){
+    fresh.shots.forehand.on = true;
+    fresh.shots.forehand.angles.flat = true;
+    fresh.discs.forehand.flat = od.forehand || '';
+  }
+  if(os.roller){
+    fresh.shots.backhand.on = true;
+    fresh.shots.backhand.angles.roller = true;
+    fresh.discs.backhand.roller = od.roller || '';
+  }
+  fresh.shots.overhand = !!os.overhand; fresh.discs.overhand = od.overhand || '';
+  fresh.shots.putter = !!os.putter; fresh.discs.putter = od.putter || '';
+  fresh.shots.other = !!os.other; fresh.discs.other = od.other || '';
+  return fresh;
+}
+function migrateState(){
+  let changed = false;
+  state.courses.forEach(c=>{
+    (c.layouts||[]).forEach(l=>{
+      l.holes = (l.holes||[]).map(h=>{
+        if(h.shots && h.shots.backhand && typeof h.shots.backhand === 'object') return h;
+        changed = true;
+        return migrateHole(h);
+      });
+    });
+  });
+  if(changed) saveState();
 }
 
 function toast(msg){
@@ -637,6 +695,108 @@ function renderPlan(){
   });
 }
 
+// Builds the full backhand/forehand + angle + disc-name UI for one hole.
+// Shared by the plan editor and Play Mode so both stay perfectly in sync.
+function buildShotPlanner(hole){
+  const wrap = document.createElement('div');
+  wrap.className = 'shot-planner';
+
+  const primaryRow = document.createElement('div');
+  primaryRow.className = 'chain-row';
+  wrap.appendChild(primaryRow);
+
+  const detailWrap = document.createElement('div');
+  wrap.appendChild(detailWrap);
+
+  function rebuild(){
+    primaryRow.innerHTML = '';
+    PRIMARY_TYPES.forEach(pt=>{
+      const chip = document.createElement('button');
+      chip.className = 'chain' + (hole.shots[pt.key].on ? ' on' : '');
+      chip.textContent = pt.label;
+      chip.onclick = ()=>{ hole.shots[pt.key].on = !hole.shots[pt.key].on; saveState(); rebuild(); };
+      primaryRow.appendChild(chip);
+    });
+    OTHER_TYPES.forEach(ot=>{
+      const chip = document.createElement('button');
+      chip.className = 'chain' + (hole.shots[ot.key] ? ' on' : '');
+      chip.textContent = ot.label;
+      chip.onclick = ()=>{ hole.shots[ot.key] = !hole.shots[ot.key]; saveState(); rebuild(); };
+      primaryRow.appendChild(chip);
+    });
+
+    detailWrap.innerHTML = '';
+
+    PRIMARY_TYPES.forEach(pt=>{
+      if(!hole.shots[pt.key].on) return;
+      const block = document.createElement('div');
+      block.className = 'shot-type-block';
+
+      const label = document.createElement('div');
+      label.className = 'field-label';
+      label.style.marginTop = '10px';
+      label.textContent = pt.label + ' — angle';
+      block.appendChild(label);
+
+      const angleRow = document.createElement('div');
+      angleRow.className = 'chain-row';
+      ANGLES.forEach(ag=>{
+        const chip = document.createElement('button');
+        chip.className = 'chain angle' + (hole.shots[pt.key].angles[ag.key] ? ' on' : '');
+        chip.textContent = ag.label;
+        chip.onclick = ()=>{
+          hole.shots[pt.key].angles[ag.key] = !hole.shots[pt.key].angles[ag.key];
+          saveState(); rebuild();
+        };
+        angleRow.appendChild(chip);
+      });
+      block.appendChild(angleRow);
+
+      const discWrap = document.createElement('div');
+      discWrap.className = 'disc-inputs';
+      const anyAngle = ANGLES.some(ag=>hole.shots[pt.key].angles[ag.key]);
+      if(!anyAngle){
+        const hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.style.marginTop = '4px';
+        hint.textContent = 'Pick an angle above to add a disc for it';
+        discWrap.appendChild(hint);
+      }
+      ANGLES.forEach(ag=>{
+        if(!hole.shots[pt.key].angles[ag.key]) return;
+        const row = document.createElement('div');
+        row.className = 'disc-input-row';
+        row.innerHTML = `<span class="tag">${pt.label} ${ag.label}</span>`;
+        const inp = document.createElement('input');
+        inp.placeholder = 'Disc name…';
+        inp.value = hole.discs[pt.key][ag.key] || '';
+        inp.addEventListener('input', e=>{ hole.discs[pt.key][ag.key] = e.target.value; saveState(); });
+        row.appendChild(inp);
+        discWrap.appendChild(row);
+      });
+      block.appendChild(discWrap);
+      detailWrap.appendChild(block);
+    });
+
+    OTHER_TYPES.forEach(ot=>{
+      if(!hole.shots[ot.key]) return;
+      const row = document.createElement('div');
+      row.className = 'disc-input-row';
+      row.style.marginTop = '10px';
+      row.innerHTML = `<span class="tag">${OTHER_TYPES.find(o=>o.key===ot.key).label}</span>`;
+      const inp = document.createElement('input');
+      inp.placeholder = 'Disc name…';
+      inp.value = hole.discs[ot.key] || '';
+      inp.addEventListener('input', e=>{ hole.discs[ot.key] = e.target.value; saveState(); });
+      row.appendChild(inp);
+      detailWrap.appendChild(row);
+    });
+  }
+
+  rebuild();
+  return wrap;
+}
+
 function renderHoleCard(layout, hole){
   const card = document.createElement('div');
   card.className = 'hole-card';
@@ -672,36 +832,7 @@ function renderHoleCard(layout, hole){
   });
   card.appendChild(head);
 
-  const chainRow = document.createElement('div');
-  chainRow.className = 'chain-row';
-  SHOT_TYPES.forEach(st=>{
-    const chip = document.createElement('button');
-    chip.className = 'chain' + (hole.shots[st.key] ? ' on' : '');
-    chip.textContent = st.label;
-    chip.onclick = ()=>{
-      hole.shots[st.key] = !hole.shots[st.key];
-      saveState();
-      renderPlan();
-    };
-    chainRow.appendChild(chip);
-  });
-  card.appendChild(chainRow);
-
-  const discWrap = document.createElement('div');
-  discWrap.className = 'disc-inputs';
-  SHOT_TYPES.forEach(st=>{
-    if(!hole.shots[st.key]) return;
-    const row = document.createElement('div');
-    row.className = 'disc-input-row';
-    row.innerHTML = `<span class="tag">${st.label}</span>`;
-    const inp = document.createElement('input');
-    inp.placeholder = 'Disc name…';
-    inp.value = hole.discs[st.key] || '';
-    inp.addEventListener('input', e=>{ hole.discs[st.key] = e.target.value; saveState(); });
-    row.appendChild(inp);
-    discWrap.appendChild(row);
-  });
-  card.appendChild(discWrap);
+  card.appendChild(buildShotPlanner(hole));
 
   const notes = document.createElement('textarea');
   notes.className = 'notes';
@@ -1273,7 +1404,6 @@ function renderPlayHole(){
     dots.appendChild(d);
   });
 
-  const activeShots = SHOT_TYPES.filter(st=>hole.shots[st.key]);
   const body = document.getElementById('playBody');
   body.innerHTML = `
     <div class="play-hole-num">Hole ${hole.n} of ${holes.length}</div>
@@ -1281,13 +1411,15 @@ function renderPlayHole(){
       <div class="play-stat"><div class="v">${hole.par}</div><div class="k">Par</div></div>
       <div class="play-stat"><div class="v">${hole.distance || '—'}</div><div class="k">Feet</div></div>
     </div>
-    <div class="play-chips">
-      ${activeShots.length ? activeShots.map(st=>`
-        <div class="play-chip">${st.label}${hole.discs[st.key] ? `<small>${escapeHtml(hole.discs[st.key])}</small>` : ''}</div>
-      `).join('') : '<div class="hint">No shot plan set for this hole yet</div>'}
-    </div>
-    <div class="play-notes ${hole.notes ? '' : 'empty'}">${hole.notes ? escapeHtml(hole.notes) : 'No notes for this hole'}</div>
+    <div class="play-shot-section" id="playShotPlannerContainer"></div>
+    <textarea class="notes play-notes-input" id="playNotesInput" placeholder="Notes: line, hazards, OB, wind read, mando side…"></textarea>
   `;
+  const notesInput = document.getElementById('playNotesInput');
+  notesInput.value = hole.notes || '';
+  notesInput.addEventListener('input', e=>{ hole.notes = e.target.value; saveState(); });
+
+  document.getElementById('playShotPlannerContainer').appendChild(buildShotPlanner(hole));
+
   if(hole.photo){
     const img = document.createElement('img');
     img.className = 'play-photo';
