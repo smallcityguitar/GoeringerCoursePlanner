@@ -620,6 +620,7 @@ function renderLayoutList(){
 function openLayout(id){
   nav.layoutId = id;
   renderPlan();
+  window.scrollTo(0, 0);
 }
 
 /* ---------- Plan editor ---------- */
@@ -991,6 +992,7 @@ function commitImport(){
   toast(`Imported ${importParsedRows.length} holes`);
   nav.screen='plan';
   renderPlan();
+  window.scrollTo(0, 0);
 }
 
 /* ============================================================
@@ -1138,15 +1140,32 @@ function parseScorecardText(text){
     });
   }
 
-  // Footer: "Jul 1, 3:37 PM, Morton, Illinois   91 °F  5.0 mph SE"
-  let location = '';
-  const footerLine = lines.find(l=>/\d{1,2}:\d{2}\s*[AP]M/.test(l));
-  if(footerLine){
-    const m = footerLine.match(/\d{1,2}:\d{2}\s*[AP]M,?\s*([A-Za-z][A-Za-z .]*?)(?=\s*\d|\s*$)/);
-    if(m) location = m[1].replace(/,\s*$/,'').trim();
-  }
+  const location = extractLocation(lines);
 
   return { courseName, layoutName, location, rows };
+}
+
+function extractLocation(lines){
+  // Strategy 1: "<Month> <Day>, [<time> AM/PM,] <City, State>" — handles the
+  // normal case, and tolerates OCR dropping the time portion entirely.
+  for(const l of lines){
+    const m = l.match(/[A-Z][a-z]{2,8}\.?\s+\d{1,2},\s*(?:\d{1,2}:\d{2}\s*[AP]M,\s*)?([A-Za-z][A-Za-z ,.]*?)(?=\s*\d|\s*$)/);
+    if(m && m[1].trim().replace(/,/g,'').length > 2) return m[1].replace(/,\s*$/,'').trim();
+  }
+  // Strategy 2: just a time stamp followed by a location, no date prefix caught.
+  for(const l of lines){
+    const m = l.match(/\d{1,2}:\d{2}\s*[AP]M,?\s*([A-Za-z][A-Za-z ,.]*?)(?=\s*\d|\s*$)/);
+    if(m && m[1].trim().replace(/,/g,'').length > 2) return m[1].replace(/,\s*$/,'').trim();
+  }
+  // Strategy 3: a standalone "City, State"-shaped line near the bottom, in case
+  // OCR dropped the date/time/weather text around it entirely.
+  for(let i=lines.length-1; i>=0; i--){
+    const l = lines[i];
+    if(/^(hole|dist|par|tot)\b/i.test(l)) continue;
+    const m = l.match(/^([A-Z][a-zA-Z.]*(?:\s[A-Z][a-zA-Z.]*)*,\s*[A-Z][a-zA-Z]+)\s*$/);
+    if(m) return m[1].trim();
+  }
+  return '';
 }
 
 function populateScanPreview(parsed){
@@ -1207,6 +1226,7 @@ function commitScan(){
   nav.courseId = course.id;
   nav.layoutId = layout.id;
   renderPlan();
+  window.scrollTo(0, 0);
 }
 
 /* ============================================================
